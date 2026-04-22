@@ -1,0 +1,43 @@
+apiVersion: krew.googlecontainertools.github.com/v1alpha2
+kind: Plugin
+metadata:
+  name: eks-pod-node-info
+spec:
+  version: v0.1.0
+  homepage: https://github.com/davidxia/kubectl-eks-pod-node-info
+  shortDescription: Show EC2 instance ID and type for EKS nodes running pods
+  description: |
+    eks-pod-node-info shows the EC2 instance ID and instance type for the
+    nodes running the specified pods in an EKS cluster.
+
+    You can filter pods by label selector or pass pod names directly. All
+    standard kubectl flags (--context, --namespace, --kubeconfig) are supported.
+  platforms:
+    - selector:
+        matchLabels:
+          os: linux
+          arch: amd64
+      uri: https://github.com/davidxia/kubectl-eks-pod-node-info/releases/download/v0.1.0/eks-pod-node-info_linux_amd64.tar.gz
+      sha256: FILL_IN_AFTER_RELEASE
+      bin: kubectl-eks_pod_node_info
+    - selector:
+        matchLabels:
+          os: linux
+          arch: arm64
+      uri: https://github.com/davidxia/kubectl-eks-pod-node-info/releases/download/v0.1.0/eks-pod-node-info_linux_arm64.tar.gz
+      sha256: FILL_IN_AFTER_RELEASE
+      bin: kubectl-eks_pod_node_info
+    - selector:
+        matchLabels:
+          os: darwin
+          arch: amd64
+      uri: https://github.com/davidxia/kubectl-eks-pod-node-info/releases/download/v0.1.0/eks-pod-node-info_darwin_amd64.tar.gz
+      sha256: FILL_IN_AFTER_RELEASE
+      bin: kubectl-eks_pod_node_info
+    - selector:
+        matchLabels:
+          os: darwin
+          arch: arm64
+      uri: https://github.com/davidxia/kubectl-eks-pod-node-info/releases/download/v0.1.0/eks-pod-node-info_darwin_arm64.tar.gz
+      sha256: FILL_IN_AFTER_RELEASE
+      bin: kubectl-eks_pod_node_info
