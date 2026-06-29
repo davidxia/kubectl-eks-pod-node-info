@@ -13,7 +13,19 @@ kubectl krew install eks-pod-node-info
 ### Manual
 
 Download a release binary for your platform from the [releases page](https://github.com/davidxia/kubectl-eks-pod-node-info/releases),
-rename it to `kubectl-eks-pod-node-info`, make it executable, and place it on your `$PATH`.
+rename it to `kubectl-eks_pod_node_info`, make it executable, and place it on your `$PATH`.
+
+Alternatively, build from source and install with the Makefile. This builds the binary
+under the name `kubectl-eks_pod_node_info` (the name `kubectl` expects) and installs it to
+`/usr/local/bin`. On macOS, `/usr/local/bin` typically requires `sudo`:
+
+```sh
+git clone https://github.com/davidxia/kubectl-eks-pod-node-info
+cd kubectl-eks-pod-node-info
+sudo make install
+```
+
+Then invoke it with `kubectl eks-pod-node-info`.
 
 ## Usage
 
