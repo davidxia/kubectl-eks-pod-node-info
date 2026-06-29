@@ -8,6 +8,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
@@ -119,6 +120,13 @@ func run(configFlags *genericclioptions.ConfigFlags, selector, output string, po
 		}
 		node, err := client.CoreV1().Nodes().Get(context.TODO(), p.nodeName, metav1.GetOptions{})
 		if err != nil {
+			if apierrors.IsNotFound(err) {
+				// The node referenced by the pod no longer exists (e.g. it was
+				// scaled down or terminated). Record an empty entry so the pod
+				// still appears in the output rather than aborting the command.
+				nodeCache[p.nodeName] = nodeInfo{}
+				continue
+			}
 			return fmt.Errorf("getting node %q: %w", p.nodeName, err)
 		}
 		instanceID := ""
