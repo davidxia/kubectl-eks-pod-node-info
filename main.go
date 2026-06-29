@@ -8,7 +8,6 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
@@ -110,31 +109,23 @@ func run(configFlags *genericclioptions.ConfigFlags, selector, output string, po
 		}
 	}
 
-	nodeCache := map[string]nodeInfo{}
-	for _, p := range pods {
-		if p.nodeName == "" {
-			continue
-		}
-		if _, cached := nodeCache[p.nodeName]; cached {
-			continue
-		}
-		node, err := client.CoreV1().Nodes().Get(context.TODO(), p.nodeName, metav1.GetOptions{})
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				// The node referenced by the pod no longer exists (e.g. it was
-				// scaled down or terminated). Record an empty entry so the pod
-				// still appears in the output rather than aborting the command.
-				nodeCache[p.nodeName] = nodeInfo{}
-				continue
-			}
-			return fmt.Errorf("getting node %q: %w", p.nodeName, err)
-		}
+	// List all nodes once rather than issuing a Get per pod's node. A pod's
+	// spec.nodeName can reference a node that no longer exists (e.g. it was
+	// scaled down or terminated); such nodes are simply absent from the cache,
+	// so the pod still appears in the output with empty instance columns.
+	nodeList, err := client.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("listing nodes: %w", err)
+	}
+	nodeCache := make(map[string]nodeInfo, len(nodeList.Items))
+	for i := range nodeList.Items {
+		node := &nodeList.Items[i]
 		instanceID := ""
 		if id := node.Spec.ProviderID; id != "" {
 			parts := strings.Split(id, "/")
 			instanceID = parts[len(parts)-1]
 		}
-		nodeCache[p.nodeName] = nodeInfo{
+		nodeCache[node.Name] = nodeInfo{
 			instanceID:   instanceID,
 			instanceType: node.Labels["node.kubernetes.io/instance-type"],
 			zone:         node.Labels["topology.kubernetes.io/zone"],
