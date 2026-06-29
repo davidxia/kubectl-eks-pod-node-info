@@ -15,8 +15,9 @@ import (
 )
 
 var (
-	selector string
-	output   string
+	selector      string
+	output        string
+	allNamespaces bool
 )
 
 func main() {
@@ -39,16 +40,20 @@ Examples:
   kubectl eks-pod-node-info --context my-eks-context -n kube-system -l k8s-app=kube-dns
 
   # Show availability zone as an additional column
-  kubectl eks-pod-node-info -o wide -n default my-pod-abc`,
+  kubectl eks-pod-node-info -o wide -n default my-pod-abc
+
+  # Show node info for pods across all namespaces
+  kubectl eks-pod-node-info -A -l app.kubernetes.io/name=gateway`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return run(configFlags, selector, output, args)
+			return run(configFlags, selector, output, allNamespaces, args)
 		},
 	}
 
 	configFlags.AddFlags(cmd.Flags())
 	cmd.Flags().StringVarP(&selector, "selector", "l", "", "Selector (label query) to filter pods")
 	cmd.Flags().StringVarP(&output, "output", "o", "", "Output format. Use 'wide' to show additional columns including availability zone")
+	cmd.Flags().BoolVarP(&allNamespaces, "all-namespaces", "A", false, "If present, list pods across all namespaces. Namespace in current context is ignored even if specified with --namespace.")
 
 	if err := cmd.Execute(); err != nil {
 		os.Exit(1)
@@ -56,8 +61,9 @@ Examples:
 }
 
 type podEntry struct {
-	podName  string
-	nodeName string
+	namespace string
+	podName   string
+	nodeName  string
 }
 
 type nodeInfo struct {
@@ -66,7 +72,11 @@ type nodeInfo struct {
 	zone         string
 }
 
-func run(configFlags *genericclioptions.ConfigFlags, selector, output string, podNames []string) error {
+func run(configFlags *genericclioptions.ConfigFlags, selector, output string, allNamespaces bool, podNames []string) error {
+	if allNamespaces && len(podNames) > 0 {
+		return fmt.Errorf("a resource cannot be retrieved by name across all namespaces")
+	}
+
 	config, err := configFlags.ToRESTConfig()
 	if err != nil {
 		return fmt.Errorf("building REST config: %w", err)
@@ -77,9 +87,13 @@ func run(configFlags *genericclioptions.ConfigFlags, selector, output string, po
 		return fmt.Errorf("creating Kubernetes client: %w", err)
 	}
 
-	namespace, _, err := configFlags.ToRawKubeConfigLoader().Namespace()
-	if err != nil {
-		return fmt.Errorf("resolving namespace: %w", err)
+	// When listing across all namespaces, pass an empty namespace to the API.
+	namespace := ""
+	if !allNamespaces {
+		namespace, _, err = configFlags.ToRawKubeConfigLoader().Namespace()
+		if err != nil {
+			return fmt.Errorf("resolving namespace: %w", err)
+		}
 	}
 
 	var pods []podEntry
@@ -90,7 +104,7 @@ func run(configFlags *genericclioptions.ConfigFlags, selector, output string, po
 			if err != nil {
 				return fmt.Errorf("getting pod %q: %w", name, err)
 			}
-			pods = append(pods, podEntry{podName: pod.Name, nodeName: pod.Spec.NodeName})
+			pods = append(pods, podEntry{namespace: pod.Namespace, podName: pod.Name, nodeName: pod.Spec.NodeName})
 		}
 	} else {
 		podList, err := client.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
@@ -105,7 +119,7 @@ func run(configFlags *genericclioptions.ConfigFlags, selector, output string, po
 		}
 		for i := range podList.Items {
 			p := &podList.Items[i]
-			pods = append(pods, podEntry{podName: p.Name, nodeName: p.Spec.NodeName})
+			pods = append(pods, podEntry{namespace: p.Namespace, podName: p.Name, nodeName: p.Spec.NodeName})
 		}
 	}
 
@@ -135,17 +149,25 @@ func run(configFlags *genericclioptions.ConfigFlags, selector, output string, po
 
 	wide := output == "wide"
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	nsPrefix := ""
+	if allNamespaces {
+		nsPrefix = "NAMESPACE\t"
+	}
 	if wide {
-		fmt.Fprintln(w, "POD\tNODE\tINSTANCE-ID\tINSTANCE-TYPE\tAVAILABILITY-ZONE")
+		fmt.Fprintln(w, nsPrefix+"POD\tNODE\tINSTANCE-ID\tINSTANCE-TYPE\tAVAILABILITY-ZONE")
 	} else {
-		fmt.Fprintln(w, "POD\tNODE\tINSTANCE-ID\tINSTANCE-TYPE")
+		fmt.Fprintln(w, nsPrefix+"POD\tNODE\tINSTANCE-ID\tINSTANCE-TYPE")
 	}
 	for _, p := range pods {
 		info := nodeCache[p.nodeName]
+		nsCol := ""
+		if allNamespaces {
+			nsCol = p.namespace + "\t"
+		}
 		if wide {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", p.podName, p.nodeName, info.instanceID, info.instanceType, info.zone)
+			fmt.Fprintf(w, "%s%s\t%s\t%s\t%s\t%s\n", nsCol, p.podName, p.nodeName, info.instanceID, info.instanceType, info.zone)
 		} else {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", p.podName, p.nodeName, info.instanceID, info.instanceType)
+			fmt.Fprintf(w, "%s%s\t%s\t%s\t%s\n", nsCol, p.podName, p.nodeName, info.instanceID, info.instanceType)
 		}
 	}
 	return w.Flush()

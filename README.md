@@ -23,6 +23,7 @@ kubectl eks-pod-node-info [flags] [pod...]
 Flags:
   -l, --selector string    Selector (label query) to filter pods
   -n, --namespace string   Namespace of the pods
+  -A, --all-namespaces     List pods across all namespaces (ignores --namespace)
   -o, --output string      Output format. Use 'wide' to show additional columns including availability zone
       --context string     Kubernetes context to use
       --kubeconfig string  Path to kubeconfig file
@@ -43,6 +44,9 @@ kubectl eks-pod-node-info --context eks-dev-us-east-1 -n kube-system -l k8s-app=
 
 # Show availability zone column
 kubectl eks-pod-node-info -n input-plane -l app.kubernetes.io/name=input-plane-gateway -o wide 
+
+# Pods across all namespaces
+kubectl eks-pod-node-info -A -l app.kubernetes.io/name=input-plane-gateway
 ```
 
 ### Sample output
@@ -59,6 +63,14 @@ With `-o wide`:
 POD                                   NODE                           INSTANCE-ID            INSTANCE-TYPE   AVAILABILITY-ZONE
 input-plane-gateway-5d7f9b8d6-xk2pq   ip-10-0-1-5.us-east-1.compute  i-0abc123def456789     m5.2xlarge      us-east-1a
 input-plane-gateway-5d7f9b8d6-zr9qm   ip-10-0-2-8.us-east-1.compute  i-0def456abc123789     m5.2xlarge      us-east-1b
+```
+
+With `-A`, a `NAMESPACE` column is prepended:
+
+```text
+NAMESPACE     POD                                    NODE                             INSTANCE-ID            INSTANCE-TYPE
+input-plane   input-plane-gateway-5d7f9b8d6-xk2pq    ip-10-0-1-5.us-east-1.compute    i-0abc123def456789     m5.2xlarge
+kube-system   kube-dns-7d8f6c9b4-pl3wn               ip-10-0-2-8.us-east-1.compute    i-0def456abc123789     m5.2xlarge
 ```
 
 ## Building from source
